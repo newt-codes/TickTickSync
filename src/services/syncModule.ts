@@ -205,7 +205,12 @@ export class SyncMan {
 			return;
 		}
 
-		if ((!this.plugin.taskParser.hasTickTickId(lineTxt) && this.plugin.taskParser.hasTickTickTag(lineTxt))) {
+		const hasId = this.plugin.taskParser.hasTickTickId(lineTxt);
+		const hasTag = this.plugin.taskParser.hasTickTickTag(lineTxt); // note: my earlier change made this return true if it has ID
+		const syncAll = getSettings().syncAllMarkdownTasks;
+		const hasExplicitFileProject = !!getSettings().fileMetadata[fileMap.getFilePath()]?.defaultProjectId;
+
+		if (!hasId && (hasTag || syncAll || hasExplicitFileProject)) {
 			//Whether #ticktick is included, but not ticktickid: Task just added.
 			try {
 

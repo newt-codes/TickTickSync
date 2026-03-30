@@ -1,11 +1,10 @@
-import type { ITask } from '@/api/types/Task';
-import type { IProject } from '@/api/types/Project';
-import type { IProjectGroup } from '@/api/types/ProjectGroup';
-import type { FileMetadata } from '@/services/cacheOperation';
-import { settingsStore } from '@/ui/settings/settingsstore';
+import type { ITask } from "@/api/types/Task";
+import type { IProject } from "@/api/types/Project";
+import type { IProjectGroup } from "@/api/types/ProjectGroup";
+import type { FileMetadata } from "@/services/cacheOperation";
+import { settingsStore } from "@/ui/settings/settingsstore";
 
 export interface ITickTickSyncSettings {
-
 	baseURL: string;
 	token?: string;
 	version?: string;
@@ -23,8 +22,7 @@ export interface ITickTickSyncSettings {
 	fileLinksInTickTick: string;
 	taskLinksInObsidian: string;
 	bkupFolder: string;
-
-
+	syncAllMarkdownTasks: boolean;
 	debugMode: boolean;
 	logLevel: string;
 	skipBackup?: boolean;
@@ -33,7 +31,6 @@ export interface ITickTickSyncSettings {
 	inboxID: string;
 	inboxName: string;
 	checkPoint: number;
-
 
 	fileMetadata: FileMetadata;
 	TickTickTasksData: {
@@ -45,34 +42,37 @@ export interface ITickTickSyncSettings {
 }
 
 export const DEFAULT_SETTINGS: ITickTickSyncSettings = {
-	baseURL: 'ticktick.com',
+	baseURL: "ticktick.com",
 	automaticSynchronizationInterval: 300, //default sync interval 300s
 	enableFullVaultSync: false,
 	tagAndOr: 1,
 	debugMode: false,
-	logLevel: 'info',
-	SyncProject: '',
-	SyncTag: '',
-	defaultProjectId: '',
-	defaultProjectName: 'Inbox',
-	TickTickTasksFilePath: '/',
+	logLevel: "info",
+	SyncProject: "",
+	SyncTag: "",
+	defaultProjectId: "",
+	defaultProjectName: "Inbox",
+	TickTickTasksFilePath: "/",
 	keepProjectFolders: false,
 	syncNotes: true,
-	noteDelimiter: '-------------------------------------------------------------',
-	fileLinksInTickTick: 'taskLink',
-	taskLinksInObsidian: 'taskLink',
-	bkupFolder: '/',
+	noteDelimiter:
+		"-------------------------------------------------------------",
+	fileLinksInTickTick: "taskLink",
+	taskLinksInObsidian: "taskLink",
+	bkupFolder: "/",
+	syncAllMarkdownTasks: false,
 
-	inboxID: '',
-	inboxName: 'Inbox',
+	inboxID: "",
+	inboxName: "Inbox",
 	checkPoint: 0,
 	skipBackup: false,
 
 	fileMetadata: {},
 	TickTickTasksData: {
 		projects: [],
-		tasks: []
-	}
+		projectGroups: [],
+		tasks: [],
+	},
 
 	//statistics: {}
 };
@@ -89,7 +89,9 @@ export const setSettings = (value: ITickTickSyncSettings) => {
 	settings = value;
 };
 
-export const updateSettings = (newSettings: Partial<ITickTickSyncSettings>): ITickTickSyncSettings => {
+export const updateSettings = (
+	newSettings: Partial<ITickTickSyncSettings>,
+): ITickTickSyncSettings => {
 	settings = { ...settings, ...newSettings } as const;
 	settingsStore.set(settings);
 	return getSettings();
@@ -125,13 +127,15 @@ export const getProjectGroups = (): IProjectGroup[] => {
 	return settings.TickTickTasksData.projectGroups;
 };
 
-export const updateProjectGroups = (newProjectGroups: IProjectGroup[]): IProjectGroup[] => {
+export const updateProjectGroups = (
+	newProjectGroups: IProjectGroup[],
+): IProjectGroup[] => {
 	settings.TickTickTasksData.projectGroups = newProjectGroups;
 	return getProjectGroups();
 };
 export const getDefaultFolder = (): string => {
-	if (settings.TickTickTasksFilePath === '/') {
-		return '';
+	if (settings.TickTickTasksFilePath === "/") {
+		return "";
 	} else {
 		return settings.TickTickTasksFilePath;
 	}

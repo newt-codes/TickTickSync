@@ -55,12 +55,34 @@
 	<div class="Full vault sync">
 		<div class="setting-item">
 			<div class="setting-item-info">
-				<div class="setting-item-name">Full vault sync</div>
+				<div class="setting-item-name">Seamless sync</div>
 				<div class="setting-item-description">
-					By default, only tasks marked with #TickTick are synchronized. If this option is turned on, all
-					tasks in
-					the vault will be synchronized.
-					<p><b>NOTE: This includes all tasks that are currently Items of a task.</b></p></div>
+					If enabled, all checklist items in Obsidian will be automatically synchronized to TickTick.
+					You will no longer need to add #ticktick manually.
+				</div>
+			</div>
+			<div class="setting-item-control">
+				<label class="toggle-switch">
+					<input
+						type="checkbox"
+						bind:checked={$settingsStore.syncAllMarkdownTasks}
+						on:change={async (e) => {
+							const checked = e.target.checked;
+							settingsStore.update((s) => ({ ...s, syncAllMarkdownTasks: checked }));
+							await plugin.saveSettings();
+					  }}
+					/>
+					<span class="slider"></span>
+				</label>
+			</div>
+		</div>
+
+		<div class="setting-item">
+			<div class="setting-item-info">
+				<div class="setting-item-name">Full vault sync (Legacy)</div>
+				<div class="setting-item-description">
+					Scan the entire vault and add tags to all tasks.
+					<p><b>NOTE: This will modify existing files.</b></p></div>
 			</div>
 			<div class="setting-item-control">
 				<label class="toggle-switch">

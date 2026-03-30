@@ -1,48 +1,49 @@
-import { App, Notice, TFile, TFolder } from 'obsidian';
-import TickTickSync from '@/main';
-import type { ITask } from './api/types/Task';
-import { TaskDeletionModal } from './modals/TaskDeletionModal';
-import { getDefaultFolder, getSettings } from '@/settings';
-import { FileMap } from '@/services/fileMap';
-import log from 'loglevel';
+import { App, Notice, TFile, TFolder } from "obsidian";
+import TickTickSync from "@/main";
+import type { ITask } from "./api/types/Task";
+import { TaskDeletionModal } from "./modals/TaskDeletionModal";
+import { getDefaultFolder, getSettings } from "@/settings";
+import { FileMap } from "@/services/fileMap";
+import log from "loglevel";
 
 export class FileOperation {
 	app: App;
 	plugin: TickTickSync;
 
-
 	constructor(app: App, plugin: TickTickSync) {
 		//super(app,settings);
 		this.app = app;
 		this.plugin = plugin;
-
 	}
-
 
 	//Complete a task and mark it as completed
 	async completeTaskInTheFile(taskId: string) {
 		// Get the task file path
-		const currentTask = await this.plugin.cacheOperation?.loadTaskFromCacheID(taskId);
-		const filepath =  this.plugin.cacheOperation?.getFilepathForTask(taskId);
+		const currentTask =
+			await this.plugin.cacheOperation?.loadTaskFromCacheID(taskId);
+		const filepath = this.plugin.cacheOperation?.getFilepathForTask(taskId);
 
 		// Get the file object and update the content
 		const file = this.app.vault.getAbstractFileByPath(filepath);
 		const content = await this.app.vault.read(file);
 
-		const lines = content.split('\n');
+		const lines = content.split("\n");
 		let modified = false;
 
 		for (let i = 0; i < lines.length; i++) {
 			const line = lines[i];
-			if (line.includes(taskId) && this.plugin.taskParser?.hasTickTickTag(line)) {
-				lines[i] = line.replace('[ ]', '[x]');
+			if (
+				line.includes(taskId) &&
+				this.plugin.taskParser?.hasTickTickTag(line)
+			) {
+				lines[i] = line.replace("[ ]", "[x]");
 				modified = true;
 				break;
 			}
 		}
 
 		if (modified) {
-			const newContent = lines.join('\n');
+			const newContent = lines.join("\n");
 			await this.app.vault.modify(file, newContent);
 			// log.trace("Modified: ", file?.path, new Date().toISOString());
 		}
@@ -51,27 +52,31 @@ export class FileOperation {
 	// uncheck completed tasks,
 	async uncompleteTaskInTheFile(taskId: string) {
 		// Get the task file path
-		const currentTask = await this.plugin.cacheOperation?.loadTaskFromCacheID(taskId);
-		const filepath =  this.plugin.cacheOperation?.getFilepathForTask(taskId);
+		const currentTask =
+			await this.plugin.cacheOperation?.loadTaskFromCacheID(taskId);
+		const filepath = this.plugin.cacheOperation?.getFilepathForTask(taskId);
 
 		// Get the file object and update the content
 		const file = this.app.vault.getAbstractFileByPath(filepath);
 		const content = await this.app.vault.read(file);
 
-		const lines = content.split('\n');
+		const lines = content.split("\n");
 		let modified = false;
 
 		for (let i = 0; i < lines.length; i++) {
 			const line = lines[i];
-			if (line.includes(taskId) && this.plugin.taskParser?.hasTickTickTag(line)) {
-				lines[i] = line.replace(/- \[(x|X)\]/g, '- [ ]');
+			if (
+				line.includes(taskId) &&
+				this.plugin.taskParser?.hasTickTickTag(line)
+			) {
+				lines[i] = line.replace(/- \[(x|X)\]/g, "- [ ]");
 				modified = true;
 				break;
 			}
 		}
 
 		if (modified) {
-			const newContent = lines.join('\n');
+			const newContent = lines.join("\n");
 			await this.app.vault.modify(file, newContent);
 			// log.error("Modified: ", file?.path, new Date().toISOString());
 		}
@@ -79,39 +84,46 @@ export class FileOperation {
 
 	//add #TickTick at the end of task line, if full vault sync enabled
 	async addTickTickTagToFile(fileMap: FileMap) {
-
-
 		if (fileMap.markAllTasks()) {
 			const newContent = fileMap.getFileLines();
 			await this.app.vault.modify(fileMap.file, newContent);
-			new Notice('New Tasks will be added to TickTick on next Sync.');
+			new Notice("New Tasks will be added to TickTick on next Sync.");
 			// log.error("Modified: ", file?.path, new Date().toISOString());
 		}
 	}
-
 
 	//add TickTick at the line
 	async addTickTickLinkToFile(filepath: string) {
 		// Get the file object and update the content
 		const file = this.app.vault.getAbstractFileByPath(filepath);
-		if ((file) && (file instanceof TFolder)) {
+		if (file && file instanceof TFolder) {
 			//leave folders alone.
 			return;
 		}
 		const content = await this.app.vault.read(file);
 
-		const lines = content.split('\n');
+		const lines = content.split("\n");
 		let modified = false;
 
 		for (let i = 0; i < lines.length; i++) {
 			const line = lines[i];
-			if (this.plugin.taskParser?.hasTickTickId(line) && this.plugin.taskParser?.hasTickTickTag(line)) {
+			if (
+				this.plugin.taskParser?.hasTickTickId(line) &&
+				this.plugin.taskParser?.hasTickTickTag(line)
+			) {
 				if (this.plugin.taskParser?.hasTickTickLink(line)) {
 					return;
 				}
 				const taskID = this.plugin.taskParser?.getTickTickId(line);
-				const taskObject = await this.plugin.cacheOperation?.loadTaskFromCacheID(taskID);
-				const newLine = this.plugin.taskParser?.addTickTickLink(line, taskObject.id, taskObject.projectId);
+				const taskObject =
+					await this.plugin.cacheOperation?.loadTaskFromCacheID(
+						taskID,
+					);
+				const newLine = this.plugin.taskParser?.addTickTickLink(
+					line,
+					taskObject.id,
+					taskObject.projectId,
+				);
 				lines[i] = newLine;
 				modified = true;
 			} else {
@@ -120,73 +132,98 @@ export class FileOperation {
 		}
 
 		if (modified) {
-			const newContent = lines.join('\n');
+			const newContent = lines.join("\n");
 			await this.app.vault.modify(file, newContent);
 			// log.error("Modified: ", file?.path, new Date().toISOString());
-
-
 		}
 	}
 
 	// sync updated task content to file
-	async synchronizeToVault(tasks: ITask[], bUpdating: boolean): Promise<boolean> {
+	async synchronizeToVault(
+		tasks: ITask[],
+		bUpdating: boolean,
+	): Promise<boolean> {
 		if (!tasks) {
-			log.error('No tasks to add.');
+			log.error("No tasks to add.");
 			return false;
 		}
 		//sort by project id and task id
-		tasks.sort((taskA, taskB) =>
-			(taskA.projectId.localeCompare(taskB.projectId) ||
-				taskA.id.localeCompare(taskB.id)));
+		tasks.sort(
+			(taskA, taskB) =>
+				taskA.projectId.localeCompare(taskB.projectId) ||
+				taskA.id.localeCompare(taskB.id),
+		);
 
-		const projectIds = [...new Set(tasks.map(task => task.projectId))];
+		const projectIds = [...new Set(tasks.map((task) => task.projectId))];
 
 		for (const projectId of projectIds) {
 			let result;
 			let taskFile: string | null | undefined = null;
-			let projectTasks = tasks.filter(task => task.projectId === projectId);
+			let projectTasks = tasks.filter(
+				(task) => task.projectId === projectId,
+			);
 
-				//If a task is in the default project, we need to find it on the file system.
-				// 1. Find file for each task
-				// 2. process the tasks by file.
-				const tasksForFiles: { file: string, tasks: ITask[] }[] = [];
-				const fileForDefaultProject = await this.plugin.cacheOperation?.getFilepathForProjectId(getSettings().defaultProjectId);
-				for (const task of projectTasks) {
-					if (task.parentId && task.parentId.length > 0) {
-						taskFile = this.plugin.cacheOperation.getFilepathForTask(task.parentId);
-					} else {
-						taskFile = this.plugin.cacheOperation.getFilepathForTask(task.id);
-					}
+			//If a task is in the default project, we need to find it on the file system.
+			// 1. Find file for each task
+			// 2. process the tasks by file.
+			const tasksForFiles: { file: string; tasks: ITask[] }[] = [];
+			const fileForDefaultProject =
+				await this.plugin.cacheOperation?.getFilepathForProjectId(
+					getSettings().defaultProjectId,
+				);
+			for (const task of projectTasks) {
+				if (task.parentId && task.parentId.length > 0) {
+					taskFile = this.plugin.cacheOperation.getFilepathForTask(
+						task.parentId,
+					);
+				} else {
+					taskFile = this.plugin.cacheOperation.getFilepathForTask(
+						task.id,
+					);
+				}
+				if (taskFile) {
+					this.addTaskToTFF(tasksForFiles, taskFile, task);
+				} else {
+					taskFile =
+						await this.plugin.cacheOperation?.getFilepathForProjectId(
+							task.projectId,
+						);
 					if (taskFile) {
 						this.addTaskToTFF(tasksForFiles, taskFile, task);
 					} else {
-						taskFile = await this.plugin.cacheOperation?.getFilepathForProjectId(task.projectId);
-						if(taskFile) {
-							this.addTaskToTFF(tasksForFiles, taskFile, task);
-						} else {
-							this.addTaskToTFF(tasksForFiles, fileForDefaultProject, task);
-						}
+						this.addTaskToTFF(
+							tasksForFiles,
+							fileForDefaultProject,
+							task,
+						);
 					}
-
 				}
-				for (const { file, tasks } of tasksForFiles) {
-					//after redistributing the tasks, make sure they're still in parent/child order.
-					this.doTheSortMambo(tasks);
-					result = await this.synchronizeToFile(file, tasks, bUpdating);
-				}
+			}
+			for (const { file, tasks } of tasksForFiles) {
+				//after redistributing the tasks, make sure they're still in parent/child order.
+				this.doTheSortMambo(tasks);
+				result = await this.synchronizeToFile(file, tasks, bUpdating);
+			}
 
 			// Sleep for 1 second
 			if (result) {
-				await new Promise(resolve => setTimeout(resolve, 1000));
+				await new Promise((resolve) => setTimeout(resolve, 1000));
 			}
 			if (getSettings().debugMode) {
-				let opString = '';
+				let opString = "";
 				if (bUpdating) {
-					opString = 'updating';
+					opString = "updating";
 				} else {
-					opString = 'adding';
+					opString = "adding";
 				}
-				log.debug('===', taskFile, projectTasks, result ? 'Completed ' + opString + ' task(s).' : ' Failed ' + opString + ' task(s).');
+				log.debug(
+					"===",
+					taskFile,
+					projectTasks,
+					result
+						? "Completed " + opString + " task(s)."
+						: " Failed " + opString + " task(s).",
+				);
 			}
 		}
 		return true;
@@ -197,12 +234,14 @@ export class FileOperation {
 		try {
 			//TODO: Deal with Folders and sections in the fullness of time.
 			let folderPath = getDefaultFolder();
-			if (!folderPath || folderPath === '') {
-				folderPath = '/';
+			if (!folderPath || folderPath === "") {
+				folderPath = "/";
 			}
 			let folder = this.app.vault.getAbstractFileByPath(folderPath);
 			if (!(folder instanceof TFolder)) {
-				log.warn(`Folder ${folderPath} does not exit. It will be created`);
+				log.warn(
+					`Folder ${folderPath} does not exit. It will be created`,
+				);
 				folder = await this.app.vault.createFolder(folderPath);
 			}
 			//TODO: When we implement this, beware case sensitivity.!
@@ -223,35 +262,40 @@ export class FileOperation {
 			log.warn(`Creating new file: ${taskFile}`);
 			const whoAdded = `${this.plugin.manifest.name} -- ${this.plugin.manifest.version}`;
 			try {
-				file = await this.app.vault.create(taskFile, `== Added by ${whoAdded} == `);
+				file = await this.app.vault.create(
+					taskFile,
+					`### TickTick Tasks`,
+				);
 			} catch (error) {
-				if (error.message.includes('File already exists')) {
-					log.info('Attempting to find existing file', taskFile);
+				if (error.message.includes("File already exists")) {
+					log.info("Attempting to find existing file", taskFile);
 					file = this.app.vault.getAbstractFileByPath(taskFile);
 					if (!file) {
-						const fileName = taskFile.split('/').pop();
+						const fileName = taskFile.split("/").pop();
 						if (fileName) {
 							//there's a file on the filesystem. But we can't get to it by name.
 							//try to find the file by name case insensitively
 							const files = this.app.vault.getMarkdownFiles();
 							for (const f of files) {
-								log.debug('Checking file', f.path);
-								if (f.path.toLowerCase() === fileName.toLowerCase()) {
-									log.debug('Found existing file', f.path);
+								log.debug("Checking file", f.path);
+								if (
+									f.path.toLowerCase() ===
+									fileName.toLowerCase()
+								) {
+									log.debug("Found existing file", f.path);
 									file = f;
 									break;
 								}
 							}
 						}
 					}
-
 				} else {
 					throw error;
 				}
 			}
 			return file;
 		} catch (error) {
-			log.error('Error on create file: ', error);
+			log.error("Error on create file: ", error);
 			throw new Error(error);
 		}
 	}
@@ -267,16 +311,23 @@ export class FileOperation {
 
 		let fileName;
 		try {
-
 			for (const file in fileMetadata) {
 				fileName = file;
 				const currentFile = this.app.vault.getAbstractFileByPath(file);
-				if ((!currentFile)) {
-					log.debug('Duplicate check Skipping ', file, ' because it\'s not found.');
+				if (!currentFile) {
+					log.debug(
+						"Duplicate check Skipping ",
+						file,
+						" because it's not found.",
+					);
 					continue;
 				}
-				if ((currentFile) && (currentFile instanceof TFolder)) {
-					log.debug('Duplicate check Skipping ', file, ' because it\'s a folder.');
+				if (currentFile && currentFile instanceof TFolder) {
+					log.debug(
+						"Duplicate check Skipping ",
+						file,
+						" because it's a folder.",
+					);
 					continue;
 				}
 				try {
@@ -284,24 +335,31 @@ export class FileOperation {
 					for (let taskListKey in taskList) {
 						// Only consider task ids that appear in the exact TickTick metadata pattern
 						// %%[ticktick_id:: <hex>]%% where <hex> is 24 hex chars
-						const pattern = new RegExp(`%%\\[ticktick_id::\\s*${taskListKey}\\]%%`, 'i');
+						const pattern = new RegExp(
+							`%%\\[ticktick_id::\\s*${taskListKey}\\]%%`,
+							"i",
+						);
 						if (pattern.test(content)) {
 							if (taskIds[taskListKey]) {
 								if (!duplicates[taskListKey]) {
-									duplicates[taskListKey] = [taskIds[taskListKey]];
+									duplicates[taskListKey] = [
+										taskIds[taskListKey],
+									];
 								}
 								duplicates[taskListKey].push(file);
 							} else {
 								taskIds[taskListKey] = file;
 							}
-
 						}
 					}
 				} catch {
-					log.error('Duplicate check Skipping ', file, ' because it\'s not readable.');
+					log.error(
+						"Duplicate check Skipping ",
+						file,
+						" because it's not readable.",
+					);
 					continue;
 				}
-
 			}
 			return duplicates;
 		} catch (Fail) {
@@ -312,16 +370,25 @@ export class FileOperation {
 	}
 
 	// delete task from file
-	async deleteTaskFromSpecificFile(filePath: TFile, task: ITask, bConfirmDialog: boolean) {
+	async deleteTaskFromSpecificFile(
+		filePath: TFile,
+		task: ITask,
+		bConfirmDialog: boolean,
+	) {
 		// Get the file object and update the content
 		if (bConfirmDialog) {
-			const bConfirm = await this.confirmDeletion(task.title + 'in File: ' + filePath);
+			const bConfirm = await this.confirmDeletion(
+				task.title + "in File: " + filePath,
+			);
 			if (!bConfirm) {
-				new Notice('Tasks will not be deleted. Please rectify the issue before the next sync.', 5000);
+				new Notice(
+					"Tasks will not be deleted. Please rectify the issue before the next sync.",
+					5000,
+				);
 				return [];
 			}
 		}
-		log.info('Task being deleted from file: ', task.id, filePath);
+		log.info("Task being deleted from file: ", task.id, filePath);
 
 		const fileMap: FileMap = new FileMap(this.app, this.plugin, filePath);
 		await fileMap.init();
@@ -336,21 +403,25 @@ export class FileOperation {
 		const taskId = task.id;
 		// Get the task file path
 
-		const filepath =  this.plugin.cacheOperation?.getFilepathForTask(taskId);
+		const filepath = this.plugin.cacheOperation?.getFilepathForTask(taskId);
 		const file = this.app.vault.getAbstractFileByPath(filepath);
 		if (filepath) {
 			await this.deleteTaskFromSpecificFile(file, task, false);
 		} else {
-			throw new Error(`File not found for ${task.title}. File path found is ${filepath}`);
+			throw new Error(
+				`File not found for ${task.title}. File path found is ${filepath}`,
+			);
 		}
-
 	}
 
 	//search TickTick_id by content
-	async searchTickTickIdFromFilePath(filepath: string, searchTerm: string): Promise<string | null> {
+	async searchTickTickIdFromFilePath(
+		filepath: string,
+		searchTerm: string,
+	): Promise<string | null> {
 		const file = this.app.vault.getAbstractFileByPath(filepath);
 		const fileContent = await this.app.vault.read(file);
-		const fileLines = fileContent.split('\n');
+		const fileLines = fileContent.split("\n");
 		let TickTickId: string | null = null;
 
 		for (let i = 0; i < fileLines.length; i++) {
@@ -373,7 +444,7 @@ export class FileOperation {
 	//get all files in the vault
 	async getAllFilesInTheVault() {
 		const files = this.app.vault.getFiles();
-		return (files);
+		return files;
 	}
 
 	async searchFilepathsByTaskidInVault(taskId: string) {
@@ -398,27 +469,31 @@ export class FileOperation {
 
 	isMarkdownFile(filename: string) {
 		// Get the extension of the file name
-		let extension = filename.split('.').pop();
+		let extension = filename.split(".").pop();
 
 		//Convert the extension to lowercase (the extension of Markdown files is usually .md)
 		extension = extension.toLowerCase();
 
 		// Determine whether the extension is .md
-		if (extension === 'md') {
+		if (extension === "md") {
 			return true;
 		} else {
 			return false;
 		}
 	}
 
-	private async synchronizeToFile(taskFile: string, projectTasks: ITask[], bUpdating: boolean) {
+	private async synchronizeToFile(
+		taskFile: string,
+		projectTasks: ITask[],
+		bUpdating: boolean,
+	) {
 		let file;
 		let result;
 		if (taskFile) {
 			file = this.app.vault.getAbstractFileByPath(taskFile);
 			if (!(file instanceof TFile)) {
 				file = await this.getOrCreateDefaultFile(taskFile);
-				log.debug('Creating new file: ', file.path);
+				log.debug("Creating new file: ", file.path);
 			}
 		}
 
@@ -434,7 +509,11 @@ export class FileOperation {
 		return result;
 	}
 
-	private async syncTasks(file: TFile, tasks: ITask[], bUpdating): Promise<boolean> {
+	private async syncTasks(
+		file: TFile,
+		tasks: ITask[],
+		bUpdating,
+	): Promise<boolean> {
 		try {
 			const newData = await this.persistToFile(tasks, file, bUpdating);
 			await this.app.vault.process(file, (data) => {
@@ -443,21 +522,26 @@ export class FileOperation {
 			});
 			return true;
 		} catch (error) {
-			log.error(`Could not ${bUpdating ? 'update' : 'add'} Tasks to file ${file.path} \n Error: ${error}`);
+			log.error(
+				`Could not ${bUpdating ? "update" : "add"} Tasks to file ${file.path} \n Error: ${error}`,
+			);
 			return false;
 		}
 	}
 
-	private async persistToFile(tasks: ITask[], file: TFile, bUpdating: boolean): Promise<string> {
+	private async persistToFile(
+		tasks: ITask[],
+		file: TFile,
+		bUpdating: boolean,
+	): Promise<string> {
 		// Go through the tasks.
 		// For every task
 		// 	if it has a parent, add it after the parent.
 		//  else add at the the insertion point in lines.
-		log.debug("Processing File: ", file.path)
+		log.debug("Processing File: ", file.path);
 		const fileMap = new FileMap(this.app, this.plugin, file);
 		await fileMap.init();
 		let bTaskMove: boolean = false;
-
 
 		// log.debug('================');
 		// log.debug('Tasks: ', tasks);
@@ -475,16 +559,26 @@ export class FileOperation {
 				numParentTabs = parentTabs + 1;
 			}
 
-			let lineText = '';
-			let filePathForNewProject = '';
+			let lineText = "";
+			let filePathForNewProject = "";
 			//Tired of seeing duplicates because of Sync conflicts.
 			if (!bUpdating) {
-				lineText = await this.plugin.taskParser?.convertTaskToLine(task, numParentTabs);
+				lineText = await this.plugin.taskParser?.convertTaskToLine(
+					task,
+					numParentTabs,
+				);
 				if (fileMap.getTaskIndex(task.id) != -1) {
-					log.warn('A Task was being added but was already in file: ', task.id, task.title);
+					log.warn(
+						"A Task was being added but was already in file: ",
+						task.id,
+						task.title,
+					);
 					//it's in the file, but not in cache. Just update it.
 					fileMap.updateTask(task, lineText);
-					await this.plugin.cacheOperation?.updateTaskToCache(task, file.path);
+					await this.plugin.cacheOperation?.updateTaskToCache(
+						task,
+						file.path,
+					);
 					addedTasks.push(task.id);
 					continue;
 				} else {
@@ -492,23 +586,50 @@ export class FileOperation {
 				}
 			} else {
 				//For updates doing the dateHolder mambo here because we need to make sure we get old dates....
-				const oldTask: ITask = this.plugin.cacheOperation?.loadTaskFromCacheID(task.id);
+				const oldTask: ITask =
+					this.plugin.cacheOperation?.loadTaskFromCacheID(task.id);
 				this.plugin.dateMan?.addDateHolderToTask(task, oldTask);
-				lineText = await this.plugin.taskParser?.convertTaskToLine(task, numParentTabs);
+				lineText = await this.plugin.taskParser?.convertTaskToLine(
+					task,
+					numParentTabs,
+				);
 				if (oldTask) {
 					//Only check for Project/Parent change if task is in cache.
-					if ((this.plugin.taskParser?.isProjectIdChanged(oldTask, task))) {
-						log.debug('Moving Task: ', task.id, task.title, ' from Project: ', oldTask.projectId, ' to Project: ', task.projectId);
-						filePathForNewProject = await this.handleTickTickStructureMove(task, oldTask, lineText, fileMap);
+					if (
+						this.plugin.taskParser?.isProjectIdChanged(
+							oldTask,
+							task,
+						)
+					) {
+						log.debug(
+							"Moving Task: ",
+							task.id,
+							task.title,
+							" from Project: ",
+							oldTask.projectId,
+							" to Project: ",
+							task.projectId,
+						);
+						filePathForNewProject =
+							await this.handleTickTickStructureMove(
+								task,
+								oldTask,
+								lineText,
+								fileMap,
+							);
 						//because we need to update the OBS URL in TT and fix up the cache.
 						bTaskMove = true;
 					} else {
-						const bParentUpdate = this.plugin.taskParser?.isParentIdChanged(oldTask, task);
+						const bParentUpdate =
+							this.plugin.taskParser?.isParentIdChanged(
+								oldTask,
+								task,
+							);
 						fileMap.updateTask(task, lineText, bParentUpdate);
 					}
 				} else {
 					//how would that happen????
-					log.warn('No Old Task found for: ', task.id);
+					log.warn("No Old Task found for: ", task.id);
 				}
 			}
 
@@ -518,30 +639,46 @@ export class FileOperation {
 				task.tags = tags;
 			}
 
-			if (getSettings().fileLinksInTickTick !== 'noLink') {
+			if (getSettings().fileLinksInTickTick !== "noLink") {
 				let taskURL = "";
 				if (!bTaskMove) {
-					taskURL = this.plugin.taskParser?.getObsidianUrlFromFilepath(file.path);
+					taskURL =
+						this.plugin.taskParser?.getObsidianUrlFromFilepath(
+							file.path,
+						);
 				} else {
-					taskURL = this.plugin.taskParser?.getObsidianUrlFromFilepath(filePathForNewProject);
+					taskURL =
+						this.plugin.taskParser?.getObsidianUrlFromFilepath(
+							filePathForNewProject,
+						);
 				}
 				if (taskURL) {
-					task.title = task.title + ' ' + taskURL;
+					task.title = task.title + " " + taskURL;
 				}
 			}
 
 			if (!bUpdating) {
 				//we're updating the task to get the right OBS URL in there.
-				let addedTask = await this.plugin.tickTickRestAPI?.UpdateTask(task);
-				await this.plugin.cacheOperation?.appendTaskToCache(addedTask, file.path);
+				let addedTask =
+					await this.plugin.tickTickRestAPI?.UpdateTask(task);
+				await this.plugin.cacheOperation?.appendTaskToCache(
+					addedTask,
+					file.path,
+				);
 			} else {
 				if (!bTaskMove) {
-					await this.plugin.cacheOperation?.updateTaskToCache(task, file.path);
+					await this.plugin.cacheOperation?.updateTaskToCache(
+						task,
+						file.path,
+					);
 				} else {
-					let addedTask = await this.plugin.tickTickRestAPI?.UpdateTask(task);
-					await this.plugin.cacheOperation?.updateTaskToCache(addedTask, filePathForNewProject);
+					let addedTask =
+						await this.plugin.tickTickRestAPI?.UpdateTask(task);
+					await this.plugin.cacheOperation?.updateTaskToCache(
+						addedTask,
+						filePathForNewProject,
+					);
 				}
-
 			}
 		}
 
@@ -551,7 +688,6 @@ export class FileOperation {
 	}
 
 	private hasChildren(currentTask: ITask) {
-
 		if (currentTask.childIds) {
 			return currentTask.childIds?.length > 0;
 		} else {
@@ -562,43 +698,73 @@ export class FileOperation {
 	private async confirmDeletion(taskTitle: string) {
 		const tasksTitles = [];
 		tasksTitles.push(taskTitle);
-		const reason: string = 'task not found in local cache.';
-		const myModal = new TaskDeletionModal(this.app, tasksTitles, reason, (result) => {
-			this.ret = result;
-		});
+		const reason: string = "task not found in local cache.";
+		const myModal = new TaskDeletionModal(
+			this.app,
+			tasksTitles,
+			reason,
+			(result) => {
+				this.ret = result;
+			},
+		);
 		const bConfirmation = await myModal.showModal();
 
 		return bConfirmation;
 	}
 
-
 	//Just the notification now.
-	private async handleTickTickStructureMove(newTask: ITask, oldTask: ITask, lineText: string, fileMap: FileMap) {
-		log.debug('deleting old task: ', oldTask.id, oldTask.title, ' from file');
-		let filePathForNewProject = await this.plugin.cacheOperation?.getFilepathForProjectId(newTask.projectId);
+	private async handleTickTickStructureMove(
+		newTask: ITask,
+		oldTask: ITask,
+		lineText: string,
+		fileMap: FileMap,
+	) {
+		log.debug(
+			"deleting old task: ",
+			oldTask.id,
+			oldTask.title,
+			" from file",
+		);
+		let filePathForNewProject =
+			await this.plugin.cacheOperation?.getFilepathForProjectId(
+				newTask.projectId,
+			);
 		if (!filePathForNewProject) {
 			let errmsg = `File not found for moved newTask:  ${newTask.id}, ${newTask.title}`;
 			throw new Error(errmsg);
 		}
-		const tFilePathForProject = await this.plugin.fileOperation.getOrCreateDefaultFile(filePathForNewProject)
-		if (!tFilePathForProject || (!(tFilePathForProject instanceof TFile))) {
+		const tFilePathForProject =
+			await this.plugin.fileOperation.getOrCreateDefaultFile(
+				filePathForNewProject,
+			);
+		if (!tFilePathForProject || !(tFilePathForProject instanceof TFile)) {
 			let errmsg = `File not found for moved newTask:  ${newTask.id}, ${newTask.title}, ${filePathForNewProject}`;
 			throw new Error(errmsg);
 		}
-		log.debug('oldFilePath: ', fileMap.getFilePath());
+		log.debug("oldFilePath: ", fileMap.getFilePath());
 		if (!fileMap || !fileMap.getFilePath()) {
 			let errmsg = `File not found for moved newTask:  ${newTask.id}, ${newTask.title}`;
 			throw new Error(errmsg);
 		}
 		fileMap.deleteTask(oldTask.id);
-		log.debug('deleted from: ', fileMap.getFilePath());
+		log.debug("deleted from: ", fileMap.getFilePath());
 
 		await this.plugin.cacheOperation?.deleteTaskFromCache(oldTask.id);
 
-		const newFileMap = new FileMap(this.app, this.plugin, tFilePathForProject);
+		const newFileMap = new FileMap(
+			this.app,
+			this.plugin,
+			tFilePathForProject,
+		);
 		await newFileMap.init();
 		//insert into the new file.
-		log.debug('Adding Task: ', newTask.id, newTask.title, ' to new file: ', newFileMap.getFilePath());
+		log.debug(
+			"Adding Task: ",
+			newTask.id,
+			newTask.title,
+			" to new file: ",
+			newFileMap.getFilePath(),
+		);
 		newFileMap.addTask(newTask, lineText);
 		const newData = newFileMap.getFileLines();
 		await this.app.vault.process(tFilePathForProject, (data) => {
@@ -608,42 +774,69 @@ export class FileOperation {
 
 		//task is updated to cache in the caller....!
 
-
 		const cleanTitle = this.plugin.taskParser?.stripOBSUrl(newTask.title);
-		let message = '';
+		let message = "";
 		if (newTask.projectId != oldTask.projectId) {
-			const newProjectName = await this.plugin.cacheOperation?.getProjectNameByIdFromCache(newTask.projectId);
-			const oldProjectName = await this.plugin.cacheOperation?.getProjectNameByIdFromCache(oldTask.projectId);
-			message = 'Task Moved.\nTask: ' + cleanTitle + '\nwas moved from\n ' + oldProjectName + '\nto\n' + newProjectName;
+			const newProjectName =
+				await this.plugin.cacheOperation?.getProjectNameByIdFromCache(
+					newTask.projectId,
+				);
+			const oldProjectName =
+				await this.plugin.cacheOperation?.getProjectNameByIdFromCache(
+					oldTask.projectId,
+				);
+			message =
+				"Task Moved.\nTask: " +
+				cleanTitle +
+				"\nwas moved from\n " +
+				oldProjectName +
+				"\nto\n" +
+				newProjectName;
 		} else {
 			if (newTask.parentId) {
-				const parentTask = await this.plugin.cacheOperation?.loadTaskFromCacheID(newTask.parentId);
-				const cleanParentTaskTitle = this.plugin.taskParser?.stripOBSUrl(parentTask.title);
-				message = 'Task has new Parent.\nTask: ' + cleanTitle + '\nis now a child of\n ' + cleanParentTaskTitle;
+				const parentTask =
+					await this.plugin.cacheOperation?.loadTaskFromCacheID(
+						newTask.parentId,
+					);
+				const cleanParentTaskTitle =
+					this.plugin.taskParser?.stripOBSUrl(parentTask.title);
+				message =
+					"Task has new Parent.\nTask: " +
+					cleanTitle +
+					"\nis now a child of\n " +
+					cleanParentTaskTitle;
 			} else {
-				message = 'Task is now a top level task.\nTask: ' + cleanTitle;
+				message = "Task is now a top level task.\nTask: " + cleanTitle;
 			}
 		}
 
 		new Notice(message, 5000);
-		return filePathForNewProject
-
+		return filePathForNewProject;
 	}
 
-
-	private async deleteTaskFromOldFile(oldTask: ITask, newTask: ITask, fileMap: FileMap) {
-		const oldFilePath =  this.plugin.cacheOperation?.getFilepathForTask(oldTask.id);
-		log.debug('oldFilePath: ', oldFilePath);
+	private async deleteTaskFromOldFile(
+		oldTask: ITask,
+		newTask: ITask,
+		fileMap: FileMap,
+	) {
+		const oldFilePath = this.plugin.cacheOperation?.getFilepathForTask(
+			oldTask.id,
+		);
+		log.debug("oldFilePath: ", oldFilePath);
 		if (!oldFilePath) {
 			let errmsg = `File not found for moved newTask:  ${newTask.id}, ${newTask.title}`;
 			throw new Error(errmsg);
 		}
 		fileMap.deleteTask(oldTask.id);
-		log.debug('deleted from: ', fileMap.getFilePath());
+		log.debug("deleted from: ", fileMap.getFilePath());
 		return oldFilePath;
 	}
 
-	private async moveChildTasks(newTask: ITask, toBeProcessed: string[], filepath: string) {
+	private async moveChildTasks(
+		newTask: ITask,
+		toBeProcessed: string[],
+		filepath: string,
+	) {
 		for (const childId of newTask.childIds) {
 			//Are they going to be processed later?
 			if (toBeProcessed.includes(childId)) {
@@ -651,46 +844,85 @@ export class FileOperation {
 				continue;
 			}
 			//get it from cache
-			const currentChild = await this.plugin.cacheOperation?.loadTaskFromCacheID(childId);
+			const currentChild =
+				await this.plugin.cacheOperation?.loadTaskFromCacheID(childId);
 			if (currentChild) {
 				currentChild.parentId = newTask.id;
 				currentChild.projectId = newTask.projectId;
 				const numChildTaskItems = currentChild.items?.length;
 
-				await this.moveTask(filepath, currentChild, numChildTaskItems, currentChild.id, currentChild.projectId);
+				await this.moveTask(
+					filepath,
+					currentChild,
+					numChildTaskItems,
+					currentChild.id,
+					currentChild.projectId,
+				);
 				const currentChildHasChildren = this.hasChildren(currentChild);
 				if (currentChildHasChildren) {
-					const currentChild = await this.plugin.cacheOperation?.loadTaskFromCacheID(childId);
-					await this.moveChildTasks(currentChild, toBeProcessed, filepath);
+					const currentChild =
+						await this.plugin.cacheOperation?.loadTaskFromCacheID(
+							childId,
+						);
+					await this.moveChildTasks(
+						currentChild,
+						toBeProcessed,
+						filepath,
+					);
 				}
 			} else {
 				//weird move. Don't break. Assume it will be taken care of on the next sync
-				log.warn('Child not found: ', childId);
+				log.warn("Child not found: ", childId);
 			}
-
 		}
 	}
 
 	//TODO: Possibly not needed any longer.
-	private async moveTask(filepath: string, task: ITask, oldtaskItemNum: number, oldTaskId: string, oldProjectId: string) {
+	private async moveTask(
+		filepath: string,
+		task: ITask,
+		oldtaskItemNum: number,
+		oldTaskId: string,
+		oldProjectId: string,
+	) {
 		const tFilePath = this.app.vault.getAbstractFileByPath(filepath);
 		await this.deleteTaskFromSpecificFile(tFilePath, task, false);
 		await this.plugin.cacheOperation?.deleteTaskFromCache(oldTaskId);
 
 		await this.synchronizeToVault([task]);
 		const cleanTitle = this.plugin.taskParser?.stripOBSUrl(task.title);
-		let message = '';
+		let message = "";
 		if (task.projectId != oldProjectId) {
-			const newProjectName = await this.plugin.cacheOperation?.getProjectNameByIdFromCache(task.projectId);
-			const oldProjectName = await this.plugin.cacheOperation?.getProjectNameByIdFromCache(oldProjectId);
-			message = 'Task Moved.\nTask: ' + cleanTitle + '\nwas moved from\n ' + oldProjectName + '\nto\n' + newProjectName;
+			const newProjectName =
+				await this.plugin.cacheOperation?.getProjectNameByIdFromCache(
+					task.projectId,
+				);
+			const oldProjectName =
+				await this.plugin.cacheOperation?.getProjectNameByIdFromCache(
+					oldProjectId,
+				);
+			message =
+				"Task Moved.\nTask: " +
+				cleanTitle +
+				"\nwas moved from\n " +
+				oldProjectName +
+				"\nto\n" +
+				newProjectName;
 		} else {
 			if (task.parentId) {
-				const parentTask = await this.plugin.cacheOperation?.loadTaskFromCacheID(task.parentId);
-				const cleanParentTaskTitle = this.plugin.taskParser?.stripOBSUrl(parentTask.title);
-				message = 'Task has new Parent.\nTask: ' + cleanTitle + '\nis now a child of\n ' + cleanParentTaskTitle;
+				const parentTask =
+					await this.plugin.cacheOperation?.loadTaskFromCacheID(
+						task.parentId,
+					);
+				const cleanParentTaskTitle =
+					this.plugin.taskParser?.stripOBSUrl(parentTask.title);
+				message =
+					"Task has new Parent.\nTask: " +
+					cleanTitle +
+					"\nis now a child of\n " +
+					cleanParentTaskTitle;
 			} else {
-				message = 'Task is now a top level task.\nTask: ' + cleanTitle;
+				message = "Task is now a top level task.\nTask: " + cleanTitle;
 			}
 		}
 
@@ -751,9 +983,8 @@ export class FileOperation {
 	// }
 
 	private getParent(taskId, tasks) {
-		return tasks.find(task => task.id === taskId);
+		return tasks.find((task) => task.id === taskId);
 	}
-
 
 	// Recursive function to sort tasks, placing child tasks before their parents
 	private sortChildrenfirst(tasks: ITask[]): ITask[] {
@@ -761,14 +992,14 @@ export class FileOperation {
 		const taskMap = new Map<string, ITask>();
 
 		// Map tasks by their IDs for easy lookup
-		tasks.forEach(task => taskMap.set(task.id, task));
+		tasks.forEach((task) => taskMap.set(task.id, task));
 
 		// Function to recursively add tasks, making sure children appear before parents
 		const addTaskWithChildren = (task: ITask) => {
 			if (!sorted.includes(task)) {
 				// Add children first
 				if (task.childIds) {
-					task.childIds.forEach(childId => {
+					task.childIds.forEach((childId) => {
 						const childTask = taskMap.get(childId);
 						if (childTask) {
 							addTaskWithChildren(childTask);
@@ -782,7 +1013,7 @@ export class FileOperation {
 		};
 
 		// Iterate through all tasks and ensure children are added before their parents
-		tasks.forEach(task => {
+		tasks.forEach((task) => {
 			addTaskWithChildren(task);
 		});
 		return sorted;
@@ -792,12 +1023,14 @@ export class FileOperation {
 		const taskMap = new Map();
 
 		// Populate the map
-		tasks.forEach(task => taskMap.set(task.id, { ...task, children: [] }));
+		tasks.forEach((task) =>
+			taskMap.set(task.id, { ...task, children: [] }),
+		);
 
 		let rootTasks = [];
 
 		// Build the hierarchy
-		tasks.forEach(task => {
+		tasks.forEach((task) => {
 			if (task.parentId && taskMap.has(task.parentId)) {
 				taskMap.get(task.parentId).children.push(taskMap.get(task.id));
 			} else {
@@ -826,10 +1059,12 @@ export class FileOperation {
 		const sortedTasks = this.sortTasksByLevel(jsonStringifiedTasks);
 
 		// Format the result to show the hierarchy
-		const result = sortedTasks.map(task => {
-			const indent = '  '.repeat(task.level - 1);
-			return `${indent}${task.title} (Level: ${task.level})`;
-		}).join('\n');
+		const result = sortedTasks
+			.map((task) => {
+				const indent = "  ".repeat(task.level - 1);
+				return `${indent}${task.title} (Level: ${task.level})`;
+			})
+			.join("\n");
 
 		return sortedTasks as ITask[];
 	}
@@ -837,13 +1072,13 @@ export class FileOperation {
 	private sortTasksByLevel(tasks: ITask[]) {
 		// Create a map of tasks by ID for easy reference
 		const taskMap = {};
-		tasks.forEach(task => {
+		tasks.forEach((task) => {
 			taskMap[task.id] = { ...task, level: 0 };
 		});
 
 		// Calculate the level of each task
-		tasks.forEach(task => {
-			if (!('parentId' in task) || (!task.parentId)) {
+		tasks.forEach((task) => {
+			if (!("parentId" in task) || !task.parentId) {
 				// This is a top-level task
 				taskMap[task.id].level = 1;
 			} else {
@@ -851,13 +1086,27 @@ export class FileOperation {
 				let currentId = task.id;
 				let level = 1;
 
-				while (taskMap[currentId] && ('parentId' in taskMap[currentId]) && taskMap[currentId].parentId) {
+				while (
+					taskMap[currentId] &&
+					"parentId" in taskMap[currentId] &&
+					taskMap[currentId].parentId
+				) {
 					level++;
 					//This happened once. It caused an infinite loop. Throw an error.
 					if (level > 6) {
-						log.debug('this is the issue: ', currentId, ' ', taskMap[currentId].parentId, '');
-						new Notice('A circular Parent-Child dependency was found. Please fix in TickTick by checking parent-child relationships.');
-						throw new Error('Circular Parent-Child dependency was found.');
+						log.debug(
+							"this is the issue: ",
+							currentId,
+							" ",
+							taskMap[currentId].parentId,
+							"",
+						);
+						new Notice(
+							"A circular Parent-Child dependency was found. Please fix in TickTick by checking parent-child relationships.",
+						);
+						throw new Error(
+							"Circular Parent-Child dependency was found.",
+						);
 					}
 					currentId = taskMap[currentId].parentId;
 				}
@@ -881,8 +1130,12 @@ export class FileOperation {
 		return sortedTasks;
 	}
 
-	private addTaskToTFF(taskForFiles: { file: string; tasks: ITask[] }[], taskFile: string | null, task: ITask) {
-		let fileTaskObj = taskForFiles.find(obj => obj.file === taskFile);
+	private addTaskToTFF(
+		taskForFiles: { file: string; tasks: ITask[] }[],
+		taskFile: string | null,
+		task: ITask,
+	) {
+		let fileTaskObj = taskForFiles.find((obj) => obj.file === taskFile);
 		if (!fileTaskObj) {
 			fileTaskObj = { file: taskFile, tasks: [] };
 			taskForFiles.push(fileTaskObj);

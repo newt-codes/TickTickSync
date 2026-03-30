@@ -269,9 +269,10 @@ export class FileMap {
 			const hasTickId = !!this.plugin.taskParser?.hasTickTickId(line);
 			const hasTag = !!this.plugin.taskParser?.hasTickTickTag(line);
 			if (!hasTickId && !hasTag && !hasItemId && !isTwoSpaceChecklist) {
-				let newLine = this.plugin.taskParser?.addTickTickTag(line);
-				lines[i] = newLine;
-				modified = true;
+				// In this fork, we don't automatically add the tag.
+				// let newLine = this.plugin.taskParser?.addTickTickTag(line);
+				// lines[i] = newLine;
+				// modified = true;
 			}
 		}
 		return modified;

@@ -1,10 +1,10 @@
-import { type App, Notice } from 'obsidian';
-import type TickTickSync from '@/main';
-import type { ITask, ITaskItem } from '@/api/types/Task';
-import { getSettings } from '@/settings';
-import { sha256 } from 'crypto-hash';
-import type { FileMap, ITaskRecord } from '@/services/fileMap';
-import log from 'loglevel';
+import { type App, Notice } from "obsidian";
+import type TickTickSync from "@/main";
+import type { ITask, ITaskItem } from "@/api/types/Task";
+import { getSettings } from "@/settings";
+import { sha256 } from "crypto-hash";
+import type { FileMap, ITaskRecord } from "@/services/fileMap";
+import log from "loglevel";
 
 interface dataviewTaskObject {
 	status: string;
@@ -27,13 +27,23 @@ interface dataviewTaskObject {
 	blockId: string;
 }
 
-const priorityEmojis = ['⏬', '🔽', '🔼', '⏫', '🔺'];
+const priorityEmojis = ["⏬", "🔽", "🔼", "⏫", "🔺"];
 const prioritySymbols = {
-	Highest: '🔺', High: '⏫', Medium: '🔼', Low: '🔽', Lowest: '⏬', None: ''
+	Highest: "🔺",
+	High: "⏫",
+	Medium: "🔼",
+	Low: "🔽",
+	Lowest: "⏬",
+	None: "",
 } as const;
 
 enum Priority {
-	Highest = '5', High = '5', Medium = '3', None = '0', Low = '1', Lowest = '0',
+	Highest = "5",
+	High = "5",
+	Medium = "3",
+	None = "0",
+	Low = "1",
+	Lowest = "0",
 }
 
 //From https://publish.obsidian.md/tasks/Reference/Task+Formats/Tasks+Emoji+Format
@@ -45,27 +55,33 @@ enum Priority {
 // - [-] #task Has a cancelled date ❌ 2023-04-18
 
 const keywords = {
-	TickTick_TAG: '#ticktick',
-	DUE_DATE: '⏳|🗓️|📅|📆|🗓',
-	TIME: '⌚',
-	TASK_DUE_DATE: '📅',
-	TASK_COMPLETE: '✅',
-	ALL_TASK_EMOJI: '➕|⏳|🛫|📅|✅|❌',
+	TickTick_TAG: "#ticktick",
+	DUE_DATE: "⏳|🗓️|📅|📆|🗓",
+	TIME: "⌚",
+	TASK_DUE_DATE: "📅",
+	TASK_COMPLETE: "✅",
+	ALL_TASK_EMOJI: "➕|⏳|🛫|📅|✅|❌",
 	// priorityIcons: "⏬|🔽|🔼|⏫|🔺",
 	// priority: `\s([${priorityEmojis.toString()}])\s`
-	priority: `\\s([\u{23EC}\u{1F53D}\u{1F53C}\u{23EB}\u{1F53A}])\\s`
+	priority: `\\s([\u{23EC}\u{1F53D}\u{1F53C}\u{23EB}\u{1F53A}])\\s`,
 };
 
-
 //For now, we're going to do task view emojies only
-const priorityMapping = [{ ticktick: 0, obsidian: null }, { ticktick: 0, obsidian: '⏬' }, {
-	ticktick: 1,
-	obsidian: '🔽'
-}, { ticktick: 3, obsidian: '🔼' }, { ticktick: 5, obsidian: '⏫' }, { ticktick: 5, obsidian: '🔺' }];
-
+const priorityMapping = [
+	{ ticktick: 0, obsidian: null },
+	{ ticktick: 0, obsidian: "⏬" },
+	{
+		ticktick: 1,
+		obsidian: "🔽",
+	},
+	{ ticktick: 3, obsidian: "🔼" },
+	{ ticktick: 5, obsidian: "⏫" },
+	{ ticktick: 5, obsidian: "🔺" },
+];
 
 //borrowed from https://github.com/moremeyou/Obsidian-Tag-Buddy
-const tag_regex = /(?<=^|\s)(#(?=[^\s#.'’,;!?:]*[^\d\s#.'’,;!?:])[^\s#.'’,;!?:]+)(?=[.,;!?:'’\s]|$)|(?<!`)```(?!`)/g; // fix for number-only and typographic apostrophy's
+const tag_regex =
+	/(?<=^|\s)(#(?=[^\s#.'’,;!?:]*[^\d\s#.'’,;!?:])[^\s#.'’,;!?:]+)(?=[.,;!?:'’\s]|$)|(?<!`)```(?!`)/g; // fix for number-only and typographic apostrophy's
 // const due_date_regex = `(${keywords.DUE_DATE})\\s(\\d{4}-\\d{2}-\\d{2})(\\s\\d{1,}:\\d{2})?`
 const due_date_regex = `(${keywords.DUE_DATE})\\s(\\d{4}-\\d{2}-\\d{2})\\s*(\\d{1,}:\\d{2})*`;
 const due_date_strip_regex = `[${keywords.DUE_DATE}]\\s\\d{4}-\\d{2}-\\d{2}(\\s\\d{1,}:\\d{2}|)`;
@@ -73,12 +89,12 @@ const completion_date_regex = `(${keywords.TASK_COMPLETE})\\s(\\d{4}-\\d{2}-\\d{
 const completion_date_strip_regex = `${keywords.TASK_COMPLETE}\\s\\d{4}-\\d{2}-\\d{2}(\\s*\\d{1,}:\\d{2}|)`;
 
 /*
-* Stolen from https://github.com/obsidian-tasks-group/obsidian-tasks/blob/main/src/Task/TaskRegularExpressions.ts
-* used without permission.
-* Will ask for forgiveness in the fullness of time.
-*
-* */
-const status_regex = '^\\s*(-|\\*)\\s+\\[(x| )\\]\\s';
+ * Stolen from https://github.com/obsidian-tasks-group/obsidian-tasks/blob/main/src/Task/TaskRegularExpressions.ts
+ * used without permission.
+ * Will ask for forgiveness in the fullness of time.
+ *
+ * */
+const status_regex = "^\\s*(-|\\*)\\s+\\[(x| )\\]\\s";
 
 const indentationRegex = /^([\s\t>]*)/;
 
@@ -93,37 +109,42 @@ const afterCheckboxRegex = / *(.*)/u;
 const taskIDRegex = / %%(.*)%%/u;
 const taskRegex = new RegExp(
 	indentationRegex.source +
-	listMarkerRegex.source +
-	' +' +
-	checkboxRegex.source +
-	afterCheckboxRegex.source,
-	'u'
+		listMarkerRegex.source +
+		" +" +
+		checkboxRegex.source +
+		afterCheckboxRegex.source,
+	"u",
 );
 /*End of stolen regex*/
 
 export const REGEX = {
 	//hopefully tighter find.
-	TickTick_TAG: new RegExp(`^[\\s]*[-] \\[[x ]\\] [\\s\\S]*${keywords.TickTick_TAG}[\\s\\S]*$`, 'i'),
+	TickTick_TAG: new RegExp(
+		`^[\\s]*[-] \\[[x ]\\] [\\s\\S]*${keywords.TickTick_TAG}[\\s\\S]*$`,
+		"i",
+	),
 
 	TickTick_ID: /\[ticktick_id::\s*[\d\S]+\]/,
 	TickTick_ID_NUM: /\[ticktick_id::\s*(.*?)\]/,
 	TickTick_ID_DV_NUM: /ticktick_id(.*?)%/,
-	TickTick_LINK: /\[link\]\(.*?\)/,
-	DUE_DATE_WITH_EMOJ: new RegExp(`(${keywords.DUE_DATE})\\s?\\d{4}-\\d{2}-\\d{2}`), // DUE_DATE : new RegExp(`(?:${keywords.DUE_DATE})\\s?(\\d{4}-\\d{2}-\\d{2})`),
-	DUE_DATE: new RegExp(due_date_regex, 'gmu'),
-	COMPLETION_DATE: new RegExp(completion_date_regex, 'gmu'),
+	TickTick_LINK: /\[(link|\[🔗\])\]\(.*?\)/,
+	DUE_DATE_WITH_EMOJ: new RegExp(
+		`(${keywords.DUE_DATE})\\s?\\d{4}-\\d{2}-\\d{2}`,
+	), // DUE_DATE : new RegExp(`(?:${keywords.DUE_DATE})\\s?(\\d{4}-\\d{2}-\\d{2})`),
+	DUE_DATE: new RegExp(due_date_regex, "gmu"),
+	COMPLETION_DATE: new RegExp(completion_date_regex, "gmu"),
 
 	PROJECT_NAME: /\[project::\s*(.*?)\]/,
 	TASK_CONTENT: {
-		REMOVE_PRIORITY: /[🔺⏫🔼🔽⏬]/ug, //accommodate UTF-16 languages.
+		REMOVE_PRIORITY: /[🔺⏫🔼🔽⏬]/gu, //accommodate UTF-16 languages.
 		REMOVE_TAGS: tag_regex,
 		REMOVE_SPACE: /^\s+|\s+$/g,
-		REMOVE_DATE: new RegExp(due_date_strip_regex, 'gmu'),
-		REMOVE_COMPLETION_DATE: new RegExp(completion_date_strip_regex, 'gmu'),
+		REMOVE_DATE: new RegExp(due_date_strip_regex, "gmu"),
+		REMOVE_COMPLETION_DATE: new RegExp(completion_date_strip_regex, "gmu"),
 		REMOVE_INLINE_METADATA: /%%\[\w+::\s*\w+\]%%/,
 		REMOVE_CHECKBOX: /^(-|\*)\s+\[(x|X| )\]\s/,
 		REMOVE_CHECKBOX_WITH_INDENTATION: /^([ \t]*)?(-|\*)\s+\[(x|X| )\]\s/,
-		REMOVE_TickTick_LINK: /\[link\]\(.*?\)/
+		REMOVE_TickTick_LINK: /\[(link|\[🔗\])\]\(.*?\)/,
 	}, //todo: this and remove_tags are redundant. Probably some of the other stuff to. Rationalize this lot.
 	ALL_TAGS: tag_regex,
 	TASK_CHECKBOX_CHECKED: /- \[(x|X)\] /,
@@ -134,7 +155,7 @@ export const REGEX = {
 	BLANK_LINE: /^\s*$/,
 	TickTick_EVENT_DATE: /(\d{4})-(\d{2})-(\d{2})/,
 	ITEM_LINE: /\[(.*?)\]\s*(.*?)\s*%%(.*?)%%/,
-	LINE_ITEM_ID: /%%(?!\[ticktick_id::\s)[a-f0-9]{24}%%/g
+	LINE_ITEM_ID: /%%(?!\[ticktick_id::\s)[a-f0-9]{24}%%/g,
 };
 
 export class TaskParser {
@@ -149,23 +170,25 @@ export class TaskParser {
 
 	//convert a task object to a task line.
 	async convertTaskToLine(task: ITask, numTabs: number): Promise<string> {
-
-		const tabs = '\t'.repeat(numTabs);
+		const tabs = "\t".repeat(numTabs);
 		let resultLine = tabs;
 
 		task.title = this.stripOBSUrl(task.title);
 
-		resultLine += `- [${task.status > 0 ? 'x' : ' '}] ${task.title}`;
-
+		resultLine += `- [${task.status > 0 ? "x" : " "}] ${task.title}`;
 
 		//add Tags
 		if (task.tags) {
 			resultLine = this.addTagsToLine(resultLine, task.tags);
 		}
-		resultLine = this.addTickTickTag(resultLine);
+		//resultLine = this.addTickTickTag(resultLine);
 
-		if (getSettings().taskLinksInObsidian === 'taskLink') {
-			resultLine = this.addTickTickLink(resultLine, task.id, task.projectId);
+		if (getSettings().taskLinksInObsidian === "taskLink") {
+			resultLine = this.addTickTickLink(
+				resultLine,
+				task.id,
+				task.projectId,
+			);
 		}
 
 		resultLine = this.addTickTickId(resultLine, task.id);
@@ -176,15 +199,40 @@ export class TaskParser {
 		//add dates
 		resultLine = this.plugin.dateMan?.addDatesToLine(resultLine, task);
 
-
-		if (getSettings().syncNotes || getSettings().taskLinksInObsidian === 'noteLink' ) {
-			const filePath =  this.plugin.cacheOperation?.getFilepathForTask(task.id);
+		if (
+			getSettings().syncNotes ||
+			getSettings().taskLinksInObsidian === "noteLink"
+		) {
+			const filePath = this.plugin.cacheOperation?.getFilepathForTask(
+				task.id,
+			);
 			if (this.plugin.taskParser.hasDescription(task)) {
-				resultLine = this.addNote(resultLine, task.desc, numTabs, 'Description', task.id, task.projectId);
+				resultLine = this.addNote(
+					resultLine,
+					task.desc,
+					numTabs,
+					"Description",
+					task.id,
+					task.projectId,
+				);
 			} else if (this.plugin.taskParser.hasNote(task)) {
-				resultLine = this.addNote(resultLine, task.content, numTabs, 'Note', task.id, task.projectId);
-			} else if (getSettings().taskLinksInObsidian === 'noteLink') {
-				resultLine = this.addNote(resultLine, task.content, numTabs, 'Note', task.id, task.projectId);
+				resultLine = this.addNote(
+					resultLine,
+					task.content,
+					numTabs,
+					"Note",
+					task.id,
+					task.projectId,
+				);
+			} else if (getSettings().taskLinksInObsidian === "noteLink") {
+				resultLine = this.addNote(
+					resultLine,
+					task.content,
+					numTabs,
+					"Note",
+					task.id,
+					task.projectId,
+				);
 			}
 		}
 
@@ -199,11 +247,11 @@ export class TaskParser {
 		//TODO: this is ugly but I can't find a clean regex to make it happen.
 		let result = title;
 		if (result) {
-			let eoURL = title.lastIndexOf('.md)');
+			let eoURL = title.lastIndexOf(".md)");
 			let boURL = 0;
 			if (eoURL > 0) {
 				for (let i = eoURL; i > 0; i--) {
-					if (title[i] === '[') {
+					if (title[i] === "[") {
 						boURL = i;
 						break;
 					}
@@ -219,41 +267,48 @@ export class TaskParser {
 
 	//Remove Extraneous data from line.
 	getTaskContentFromLineText(lineText: string) {
-		let taskContent = lineText.replace(REGEX.TASK_CONTENT.REMOVE_INLINE_METADATA, '')
-			.replace(REGEX.TASK_CONTENT.REMOVE_TickTick_LINK, '')
-			.replace(REGEX.TASK_CONTENT.REMOVE_PRIORITY, '')
-			.replace(REGEX.TASK_CONTENT.REMOVE_TAGS, '')
-			.replace(REGEX.TASK_CONTENT.REMOVE_CHECKBOX, '')
-			.replace(REGEX.TASK_CONTENT.REMOVE_CHECKBOX_WITH_INDENTATION, '')
-			.replace(REGEX.TASK_CONTENT.REMOVE_SPACE, '');
+		let taskContent = lineText
+			.replace(REGEX.TASK_CONTENT.REMOVE_INLINE_METADATA, "")
+			.replace(REGEX.TASK_CONTENT.REMOVE_TickTick_LINK, "")
+			.replace(REGEX.TASK_CONTENT.REMOVE_PRIORITY, "")
+			.replace(REGEX.TASK_CONTENT.REMOVE_TAGS, "")
+			.replace(REGEX.TASK_CONTENT.REMOVE_CHECKBOX, "")
+			.replace(REGEX.TASK_CONTENT.REMOVE_CHECKBOX_WITH_INDENTATION, "")
+			.replace(REGEX.TASK_CONTENT.REMOVE_SPACE, "");
 
 		taskContent = this.stripOBSUrl(taskContent);
 		taskContent = this.plugin.dateMan?.stripDatesFromLine(taskContent);
-		return (taskContent);
+		return taskContent;
 	}
 
 	stripLineItemId(lineText: string) {
-		let line = lineText.replace(REGEX.LINE_ITEM_ID, '');
+		let line = lineText.replace(REGEX.LINE_ITEM_ID, "");
 		return line;
 	}
 
 	addTagsToLine(resultLine: string, tags: ITask.tags) {
 		//we're looking for the ticktick tag without the #
-		const regEx = new RegExp(keywords.TickTick_TAG.substring(1), 'i');
+		const regEx = new RegExp(keywords.TickTick_TAG.substring(1), "i");
 		tags.forEach((tag: string) => {
 			//TickTick tag, if present, will be added at the end.
 			if (!tag.match(regEx)) {
-				if (tag.includes('-')) {
-					tag = tag.replace(/-/g, '/');
+				if (tag.includes("-")) {
+					tag = tag.replace(/-/g, "/");
 				}
-				resultLine = resultLine + ' #' + tag;
+				resultLine = resultLine + " #" + tag;
 			}
 		});
 		return resultLine;
 	}
 
 	//convert line text to a task object
-	async convertLineToTask(lineText: string, lineNumber: number, filepath: string, fileMap: FileMap, inTaskRecord: ITaskRecord | null) {
+	async convertLineToTask(
+		lineText: string,
+		lineNumber: number,
+		filepath: string,
+		fileMap: FileMap,
+		inTaskRecord: ITaskRecord | null,
+	) {
 		let hasParent = false;
 		let parentId = null;
 		let parentTaskObject = null;
@@ -263,7 +318,9 @@ export class TaskParser {
 
 		const TickTick_id = this.getTickTickId(textWithoutIndentation);
 
-		const allDatesStruct = this.plugin.dateMan?.parseDates(textWithoutIndentation);
+		const allDatesStruct = this.plugin.dateMan?.parseDates(
+			textWithoutIndentation,
+		);
 
 		let taskRecord: ITaskRecord;
 
@@ -279,19 +336,20 @@ export class TaskParser {
 		let description = null;
 		let content = null;
 
-		let taskURL = '';
-		let noteURL = '';
-		let url = '';
-		if (getSettings().fileLinksInTickTick !== 'noLink') {
+		let taskURL = "";
+		let noteURL = "";
+		let url = "";
+		if (getSettings().fileLinksInTickTick !== "noLink") {
 			if (filepath) {
-				url = this.plugin.taskParser.getObsidianUrlFromFilepath(filepath);
+				url =
+					this.plugin.taskParser.getObsidianUrlFromFilepath(filepath);
 			}
 		}
-		if (getSettings().fileLinksInTickTick === 'taskLink') {
+		if (getSettings().fileLinksInTickTick === "taskLink") {
 			taskURL = url;
 		}
-		if (getSettings().fileLinksInTickTick === 'noteLink') {
-			noteURL = url + '\n';
+		if (getSettings().fileLinksInTickTick === "noteLink") {
+			noteURL = url + "\n";
 		}
 
 		//Detect parentID
@@ -299,36 +357,41 @@ export class TaskParser {
 			parentId = taskRecord.parentId;
 			hasParent = true;
 			// log.debug(`parent id is ${parentId}`)
-			parentTaskObject = this.plugin.cacheOperation?.loadTaskFromCacheID(parentId);
+			parentTaskObject =
+				this.plugin.cacheOperation?.loadTaskFromCacheID(parentId);
 		}
 
 		//find task items
 		const taskLineItems = fileMap.getTaskItems(TickTick_id);
 		if (taskLineItems && taskLineItems.length > 0) {
 			for (const taskLineItem in taskLineItems) {
-				taskItems.push(this.getItemFromLine(taskLineItems[taskLineItem]));
+				taskItems.push(
+					this.getItemFromLine(taskLineItems[taskLineItem]),
+				);
 			}
 		}
 
 		//Do the description/content thing
 		if (taskRecord) {
 			if (taskRecord.taskLines.length > 0) {
-				const textContent = this.getNoteString(taskRecord,TickTick_id);
+				const textContent = this.getNoteString(taskRecord, TickTick_id);
 				let noteText = noteURL + textContent;
 				if (taskLineItems && taskLineItems.length > 0) {
 					description = noteText;
 				} else {
 					content = noteText;
 				}
-			} else { //no notes
+			} else {
+				//no notes
 				if (noteURL) {
-					if (taskItems.length > 0) { //has task items
-						description = noteURL
-					} else { //has no notes, not task items.
+					if (taskItems.length > 0) {
+						//has task items
+						description = noteURL;
+					} else {
+						//has no notes, not task items.
 						content = noteURL;
 					}
 				}
-
 			}
 		}
 
@@ -336,7 +399,10 @@ export class TaskParser {
 
 		const tags = this.getAllTagsFromLineText(textWithoutIndentation);
 
-		let projectId = await this.plugin.cacheOperation?.getDefaultProjectIdForFilepath(filepath as string);
+		let projectId =
+			await this.plugin.cacheOperation?.getDefaultProjectIdForFilepath(
+				filepath as string,
+			);
 
 		if (hasParent) {
 			if (parentTaskObject) {
@@ -346,10 +412,13 @@ export class TaskParser {
 			//Check if we need to add this to a specific project by tag.
 			if (tags) {
 				for (const tag of tags) {
-					let labelName = tag.replace(/#/g, '');
-					labelName = labelName.replace(/_/g, ' ');
+					let labelName = tag.replace(/#/g, "");
+					labelName = labelName.replace(/_/g, " ");
 
-					let hasProjectId = await this.plugin.cacheOperation?.getProjectIdByNameFromCache(labelName);
+					let hasProjectId =
+						await this.plugin.cacheOperation?.getProjectIdByNameFromCache(
+							labelName,
+						);
 					if (!hasProjectId) {
 						continue;
 					}
@@ -360,54 +429,57 @@ export class TaskParser {
 		}
 
 		const title = this.getTaskContentFromLineText(textWithoutIndentation);
-		if ((getSettings().debugMode) && (!projectId)) {
-			log.error('Converting line to Object, could not find project Id: ', title);
+		if (getSettings().debugMode && !projectId) {
+			log.error(
+				"Converting line to Object, could not find project Id: ",
+				title,
+			);
 		}
 
 		const isCompleted = this.isTaskCheckboxChecked(textWithoutIndentation);
 
 		const priority = this.getTaskPriority(textWithoutIndentation);
 
-		let actualStartDate = allDatesStruct?.startDate ?
-			allDatesStruct?.startDate.isoDate : //there's a start date
-			allDatesStruct?.scheduled_date ?
-				allDatesStruct?.scheduled_date.isoDate //there's a scheduled date
-				: allDatesStruct?.dueDate ? //there are neither start date nor scheduled date.
-					allDatesStruct?.dueDate.isoDate : '';  //use the due date if there is one.
-
+		let actualStartDate = allDatesStruct?.startDate
+			? allDatesStruct?.startDate.isoDate //there's a start date
+			: allDatesStruct?.scheduled_date
+				? allDatesStruct?.scheduled_date.isoDate //there's a scheduled date
+				: allDatesStruct?.dueDate //there are neither start date nor scheduled date.
+					? allDatesStruct?.dueDate.isoDate
+					: ""; //use the due date if there is one.
 
 		const task: ITask = {
-			id: TickTick_id || '',
+			id: TickTick_id || "",
 			projectId: projectId,
 			//RSN We're going to have to figure putting it Items or in Description.
-			title: title.trim() + ' ' + taskURL,
+			title: title.trim() + " " + taskURL,
 			//content: ??
-			content: content ? content : '',
-			desc: description ? description : '',
+			content: content ? content : "",
+			desc: description ? description : "",
 			items: taskItems || [],
-			parentId: parentId || '',
-			dueDate: allDatesStruct?.dueDate?.isoDate || '',
-			startDate: actualStartDate || '',
-			completedTime: allDatesStruct?.completedTime?.isoDate || '',
+			parentId: parentId || "",
+			dueDate: allDatesStruct?.dueDate?.isoDate || "",
+			startDate: actualStartDate || "",
+			completedTime: allDatesStruct?.completedTime?.isoDate || "",
 			isAllDay: allDatesStruct?.isAllDay || false,
 			tags: tags || [],
 			priority: Number(priority),
-			modifiedTime: this.plugin.dateMan?.formatDateToISO(new Date()) || '',
+			modifiedTime:
+				this.plugin.dateMan?.formatDateToISO(new Date()) || "",
 			status: isCompleted ? 2 : 0, //Status: 0 is no completed. Anything else is completed.
 			timeZone: timeZone,
-			dateHolder: allDatesStruct //Assume that there's a dateStruct of some kind
+			dateHolder: allDatesStruct, //Assume that there's a dateStruct of some kind
 		};
 
 		return task;
-
 	}
 
 	escapeRegExp(str: string) {
-		return str.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+		return str.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 	}
 
 	getNoteString(taskRecord: ITaskRecord, id?: string | undefined) {
-		let textContent = '';
+		let textContent = "";
 		if (taskRecord.taskLines) {
 			let descriptionStrings = [...taskRecord.taskLines];
 
@@ -415,10 +487,11 @@ export class TaskParser {
 			// regardless of current settings. This enables conversion when user turns delimiter off.
 			if (descriptionStrings.length >= 2) {
 				const firstLine = descriptionStrings[0];
-				const lastLine = descriptionStrings[descriptionStrings.length - 1];
+				const lastLine =
+					descriptionStrings[descriptionStrings.length - 1];
 				// Extract raw text for comparison (trim, but keep indentation logic in FileMap)
-				const firstText = firstLine.replace(/^\t*\s{2}/, '').trim();
-				const lastText = lastLine.replace(/^\t*\s{2}/, '').trim();
+				const firstText = firstLine.replace(/^\t*\s{2}/, "").trim();
+				const lastText = lastLine.replace(/^\t*\s{2}/, "").trim();
 				if (firstText.length > 0 && firstText === lastText) {
 					descriptionStrings = descriptionStrings.slice(1, -1);
 				}
@@ -429,26 +502,39 @@ export class TaskParser {
 			let filteredDescriptionStrings;
 			if (id) {
 				// Filter out TickTick link lines that contain the task id so we don't duplicate links in notes
-				const linkRegex = new RegExp(`\\[link\\]\\(.*${this.escapeRegExp(id)}.*\\)`, 'i');
-				filteredDescriptionStrings = descriptionStrings.filter(line => !linkRegex.test(line));
+				const linkRegex = new RegExp(
+					`\\[link\\]\\(.*${this.escapeRegExp(id)}.*\\)`,
+					"i",
+				);
+				filteredDescriptionStrings = descriptionStrings.filter(
+					(line) => !linkRegex.test(line),
+				);
 			}
 			if (filteredDescriptionStrings) {
-				filteredDescriptionStrings = filteredDescriptionStrings.map(line => line.replace(/^\t*\s{2}|^\s{2}/g, ''));
-				textContent = filteredDescriptionStrings.length > 0 ? filteredDescriptionStrings.join('\n') : '';
+				filteredDescriptionStrings = filteredDescriptionStrings.map(
+					(line) => line.replace(/^\t*\s{2}|^\s{2}/g, ""),
+				);
+				textContent =
+					filteredDescriptionStrings.length > 0
+						? filteredDescriptionStrings.join("\n")
+						: "";
 			} else {
-				descriptionStrings = descriptionStrings.map(line => line.replace(/^\t*\s{2}|^\s{2}/g, ''));
-				textContent = descriptionStrings.length > 0 ? descriptionStrings.join('\n') : '';
+				descriptionStrings = descriptionStrings.map((line) =>
+					line.replace(/^\t*\s{2}|^\s{2}/g, ""),
+				);
+				textContent =
+					descriptionStrings.length > 0
+						? descriptionStrings.join("\n")
+						: "";
 			}
 		}
-		return textContent ;
+		return textContent;
 	}
 
 	hasTickTickTag(text: string) {
 		if (this.isMarkdownTask(text)) {
-			// log.debug("hasTickTickTag", `${text}
-			// ${REGEX.TickTick_TAG}
-			// ${REGEX.TickTick_TAG.test(text)}`);
-			return REGEX.TickTick_TAG.test(text);
+			// If it has the ID, we consider it a TickTick task even without the tag.
+			return REGEX.TickTick_TAG.test(text) || this.hasTickTickId(text);
 		} else {
 			return false;
 		}
@@ -460,12 +546,12 @@ export class TaskParser {
 			//try the dataview version
 			result = REGEX.TickTick_ID_DV_NUM.test(text);
 		}
-		return (result);
+		return result;
 	}
 
 	getLineItemId(text: string) {
 		if (!text) {
-			log.error('No Text passed to getLineItemId');
+			log.error("No Text passed to getLineItemId");
 			return undefined;
 		}
 		let res = text.match(REGEX.LINE_ITEM_ID);
@@ -510,14 +596,13 @@ export class TaskParser {
 	}
 
 	isTaskOpen(line: string) {
-		let result = new RegExp(status_regex, 'gmi').exec(line);
+		let result = new RegExp(status_regex, "gmi").exec(line);
 		if (result) {
-			return (result[2].search(/[xX]/) < 0);
+			return result[2].search(/[xX]/) < 0;
 		} else {
 			throw new Error(`Status not found in line: ${line}`);
 		}
 	}
-
 
 	//get all tags from task text
 	getAllTagsFromLineText(lineText: string) {
@@ -529,8 +614,8 @@ export class TaskParser {
 		//     tags = tags.map(tag => tag.replace('#', ''));
 		// }
 		const tags = [...lineText.matchAll(REGEX.ALL_TAGS)];
-		let tagArray = tags.map(tag => tag[0].replace('#', ''));
-		tagArray = tagArray.map(tag => tag.replace(/\//g, '-'));
+		let tagArray = tags.map((tag) => tag[0].replace("#", ""));
+		tagArray = tagArray.map((tag) => tag.replace(/\//g, "-"));
 		// tagArray.forEach(tag => log.debug("#### get all tags", tag))
 
 		return tagArray;
@@ -538,7 +623,7 @@ export class TaskParser {
 
 	//get checkbox status
 	isTaskCheckboxChecked(lineText: string) {
-		return (REGEX.TASK_CHECKBOX_CHECKED.test(lineText));
+		return REGEX.TASK_CHECKBOX_CHECKED.test(lineText);
 	}
 
 	//task content compare
@@ -550,8 +635,9 @@ export class TaskParser {
 		const lineTaskTitle = this.stripOBSUrl(lineTask.title);
 		const TickTickTaskTitle = this.stripOBSUrl(TickTickTask.title);
 		//Whether content is modified?
-		const contentModified = (lineTaskTitle.trim() === TickTickTaskTitle.trim());
-		return (!contentModified);
+		const contentModified =
+			lineTaskTitle.trim() === TickTickTaskTitle.trim();
+		return !contentModified;
 	}
 
 	//tag compare
@@ -560,29 +646,34 @@ export class TaskParser {
 		const TickTickTaskTags = TickTickTask.tags ? TickTickTask.tags : [];
 		if (!lineTaskTags && !TickTickTaskTags) {
 			return false; //no tags.
-		} else if ((lineTaskTags && !TickTickTaskTags) || (!lineTaskTags && TickTickTaskTags)) {
+		} else if (
+			(lineTaskTags && !TickTickTaskTags) ||
+			(!lineTaskTags && TickTickTaskTags)
+		) {
 			return true; //tasks added or deleted.
 		}
 		//Whether content is modified?
-		let areTagsSame = lineTaskTags.length === TickTickTaskTags.length
-			&& lineTaskTags.sort().every((val, index) =>
-				val === TickTickTaskTags.sort()[index]);
-		return !(areTagsSame);
+		let areTagsSame =
+			lineTaskTags.length === TickTickTaskTags.length &&
+			lineTaskTags
+				.sort()
+				.every((val, index) => val === TickTickTaskTags.sort()[index]);
+		return !areTagsSame;
 	}
 
 	//task status compare
 	isStatusChanged(lineTask: Object, TickTickTask: Object) {
 		//Whether status is modified?
-		const statusModified = (lineTask.status === TickTickTask.status);
+		const statusModified = lineTask.status === TickTickTask.status;
 		//log.debug(lineTask)
 		//log.debug(TickTickTask)
-		return (!statusModified);
+		return !statusModified;
 	}
 
 	isParentIdChanged(lineTask: ITask, TickTickTask: ITask): boolean {
-		let lineParentId = lineTask.parentId ? lineTask.parentId : '';
-		let cacheParentId = TickTickTask.parentId ? TickTickTask.parentId : '';
-		return (lineParentId != cacheParentId);
+		let lineParentId = lineTask.parentId ? lineTask.parentId : "";
+		let cacheParentId = TickTickTask.parentId ? TickTickTask.parentId : "";
+		return lineParentId != cacheParentId;
 	}
 
 	isChildrenChanged(lineTask: ITask, TickTickTask: ITask): boolean {
@@ -595,29 +686,41 @@ export class TaskParser {
 		}
 
 		return lineTask?.childIds.length != TickTickTask?.childIds.length;
-
 	}
-
 
 	//task project id compare
 	isProjectIdChanged(lineTask: ITask, TickTickTask: ITask) {
 		if (lineTask.projectId !== TickTickTask.projectId) {
-			log.debug('Project ID changed: ', lineTask.projectId, TickTickTask.projectId);
+			log.debug(
+				"Project ID changed: ",
+				lineTask.projectId,
+				TickTickTask.projectId,
+			);
 			//make sure that they're not in a non-project file.
-			const taskFile = this.plugin.cacheOperation.getFilepathForTask(TickTickTask.id);
+			const taskFile = this.plugin.cacheOperation.getFilepathForTask(
+				TickTickTask.id,
+			);
 			if (taskFile) {
 				// log.debug('Task file: ', taskFile);
-				const hasADefaultProject = this.plugin.cacheOperation.filepathHasDefaultProjectID(taskFile)
+				const hasADefaultProject =
+					this.plugin.cacheOperation.filepathHasDefaultProjectID(
+						taskFile,
+					);
 				if (hasADefaultProject) {
 					return true;
 				} else {
-					log.debug('Task file does not have a default project: ', taskFile);
+					log.debug(
+						"Task file does not have a default project: ",
+						taskFile,
+					);
 					//hate to do a notification from here, but I don't want to blindside them either.
-					new Notice(`Task ${TickTickTask.title} was moved in TickTick, but is in ${taskFile}. Assuming that this is intentional and not moving it.`, 10000	);
+					new Notice(
+						`Task ${TickTickTask.title} was moved in TickTick, but is in ${taskFile}. Assuming that this is intentional and not moving it.`,
+						10000,
+					);
 
 					return false;
 				}
-
 			}
 		} else {
 			return false;
@@ -626,7 +729,7 @@ export class TaskParser {
 
 	//Determine whether the task is indented
 	isIndentedTask(text: string) {
-		return (REGEX.TASK_INDENTATION.test(text));
+		return REGEX.TASK_INDENTATION.test(text);
 	}
 
 	//log.debug(getNumTabs(" - [x] This is a task without tabs")); // 0
@@ -637,16 +740,16 @@ export class TaskParser {
 
 	getTabs(lineText: string) {
 		const numTabs = this.getNumTabs(lineText);
-		let tabs = '';
+		let tabs = "";
 		for (let i = 0; i < numTabs; i++) {
-			tabs = tabs + '\t';
+			tabs = tabs + "\t";
 		}
 		return tabs;
 	}
 
 	// Task priority from 0 (none) to 4 (urgent).
 	getTaskPriority(lineText: string) {
-		let priority = '0';
+		let priority = "0";
 		const priorityMatch = lineText.match(REGEX.priorityRegex);
 		if (priorityMatch !== null) {
 			priority = this.parsePriority(priorityMatch[1]);
@@ -655,19 +758,18 @@ export class TaskParser {
 		return priority;
 	}
 
-
 	//Determine the number of tab characters
 	//log.debug(getNumTabs("\t\t- [x] This is a task with two tabs")); // 2
 
 	//remove task indentation
 	removeTaskIndentation(text) {
 		const regex = /^([ \t]*)?- \[(x| )\] /;
-		return text.replace(regex, '- [$2] ');
+		return text.replace(regex, "- [$2] ");
 	}
 
 	//Judge whether line is a blank line
 	isLineBlank(lineText: string) {
-		return (REGEX.BLANK_LINE.test(lineText));
+		return REGEX.BLANK_LINE.test(lineText);
 	}
 
 	isMarkdownTask(str: string): boolean {
@@ -679,13 +781,7 @@ export class TaskParser {
 	}
 
 	addTickTickTag(str: string): string {
-		//TODO: assumption that there is at least one space before. validate.
-		if (str.charAt(str.length - 1) === ' ') {
-			str = (str + `${keywords.TickTick_TAG}`);
-		} else {
-			str = (str + ` ${keywords.TickTick_TAG} `);
-		}
-
+		// In this fork, we don't automatically add the tag.
 		return str;
 	}
 
@@ -693,26 +789,38 @@ export class TaskParser {
 		// if (getSettings().debugMode) {
 		// log.debug("Getting OBS path for: ", filepath)
 		// }
-		const url = encodeURI(`obsidian://open?vault=${this.app.vault.getName()}&file=${filepath}`);
+		const url = encodeURI(
+			`obsidian://open?vault=${this.app.vault.getName()}&file=${filepath}`,
+		);
 		const obsidianUrl = `[${filepath}](${url})`;
-		return (obsidianUrl);
+		return obsidianUrl;
 	}
 
-	addTickTickLink(linetext: string, taskId: string, projecId: string): string {
+	addTickTickLink(
+		linetext: string,
+		taskId: string,
+		projecId: string,
+	): string {
 		let url = this.createURL(taskId, projecId);
-		const regex = new RegExp(`${keywords.TickTick_TAG}`, 'gi');
-		const link = ` [link](${url})`;
-		return linetext.replace(regex, link + ' ' + '$&');
+		const tagRegex = new RegExp(`${keywords.TickTick_TAG}`, "gi");
+		const link = ` [[🔗]](${url})`;
+
+		if (tagRegex.test(linetext)) {
+			return linetext.replace(tagRegex, link + " " + "$&");
+		} else {
+			// If no tag, just append the link before the ID or at the end
+			return linetext + " " + link;
+		}
 	}
 
 	//Check whether TickTick link is included
 	hasTickTickLink(lineText: string) {
-		return (REGEX.TickTick_LINK.test(lineText));
+		return REGEX.TickTick_LINK.test(lineText);
 	}
 
 	//ticktick specific url
 	createURL(newTaskId: string, projectId: string): string {
-		let url = '';
+		let url = "";
 		if (projectId) {
 			url = `https://${getSettings().baseURL}/webapp/#p/${projectId}/tasks/${newTaskId}`;
 		} else {
@@ -722,12 +830,16 @@ export class TaskParser {
 	}
 
 	translateTickTickToObsidian(ticktickPriority: number) {
-		const mapping = priorityMapping.find((item) => item.ticktick === ticktickPriority);
+		const mapping = priorityMapping.find(
+			(item) => item.ticktick === ticktickPriority,
+		);
 		return mapping ? mapping.obsidian : null;
 	}
 
 	translateObsidianToTickTick(obsidianPriority: number) {
-		const mapping = priorityMapping.find((item) => item.obsidian === obsidianPriority);
+		const mapping = priorityMapping.find(
+			(item) => item.obsidian === obsidianPriority,
+		);
 		return mapping ? mapping.ticktick : null;
 	}
 
@@ -738,20 +850,20 @@ export class TaskParser {
 			return null;
 		}
 
-		let checkBox = matches[3] || '';
+		let checkBox = matches[3] || "";
 
 		//Anything other than 'x' is a not done state. Deal with it accordingly.
 		//https://publish.obsidian.md/tasks/Getting+Started/Statuses
-		const status = checkBox == 'x';
-		let description = matches[4] || '';
-		description = description.replace(taskIDRegex, '');
+		const status = checkBox == "x";
+		let description = matches[4] || "";
+		description = description.replace(taskIDRegex, "");
 		let indent = matches[1] ? matches[1].length : 0;
 
 		return {
 			line,
 			status,
 			description,
-			indent
+			indent,
 		};
 	}
 
@@ -766,20 +878,20 @@ export class TaskParser {
 		try {
 			return await sha256(resultLine);
 		} catch (e) {
-			log.error('Hashing error.', e);
+			log.error("Hashing error.", e);
 		}
 	}
 
 	hasNote(task: ITask) {
-		return ((task.content) && (task.content.length > 0));
+		return task.content && task.content.length > 0;
 	}
 
 	hasDescription(task: ITask) {
-		return ((task.desc) && (task.desc.length > 0));
+		return task.desc && task.desc.length > 0;
 	}
 
 	hasItems(task: ITask): boolean {
-		return ((task.items) && (task.items.length > 0));
+		return task.items && task.items.length > 0;
 	}
 
 	//Note to future me: I wanted to get all the known tags in Obsidian to something clever
@@ -788,18 +900,18 @@ export class TaskParser {
 		// Check if arrays have different lengths
 		// log.debug(newNoteString, oldNoteString);
 		if (newNoteString.length !== oldNoteString.length) {
-			return true;  // strings are different, save some time.
+			return true; // strings are different, save some time.
 		}
-		const newNote = newNoteString.split('\n');
-		const oldNote = oldNoteString.split('\n');
+		const newNote = newNoteString.split("\n");
+		const oldNote = oldNoteString.split("\n");
 		// Check if elements are different
 		for (let i = 0; i < newNote.length; i++) {
 			if (newNote[i] !== oldNote[i]) {
-				return true;  // Arrays are different
+				return true; // Arrays are different
 			}
 		}
 
-		return false;  // Arrays are exactly the same
+		return false; // Arrays are exactly the same
 	}
 
 	areItemsChanged(newItems: ITaskItem[], oldItems: ITaskItem[]) {
@@ -810,13 +922,14 @@ export class TaskParser {
 		oldItems.sort((a, b) => a.id.localeCompare(b.id));
 
 		for (let i = 0; i < newItems.length; i++) {
-			if ((newItems[i].id !== newItems[i].id) ||
-				(newItems[i].status !== newItems[i].status) ||
-				(newItems[i].title !== newItems[i].title)) {
-				return true;  // Arrays are different
+			if (
+				newItems[i].id !== newItems[i].id ||
+				newItems[i].status !== newItems[i].status ||
+				newItems[i].title !== newItems[i].title
+			) {
+				return true; // Arrays are different
 			}
 		}
-
 	}
 
 	protected parsePriority(p: string): Priority {
@@ -837,14 +950,18 @@ export class TaskParser {
 		}
 	}
 
-	private addItems(resultLine: string, items: any[], numTabs: number): string {
+	private addItems(
+		resultLine: string,
+		items: any[],
+		numTabs: number,
+	): string {
 		//TODO count indentations?
-		items.forEach(item => {
-			let completion = item.status > 0 ? '- [x]' : '- [ ]';
+		items.forEach((item) => {
+			let completion = item.status > 0 ? "- [x]" : "- [ ]";
 			// When Full Vault Sync is enabled, we can't tell the difference between items and subtasks
 			// everything is a subtask
 			// TODO: in the fullness of time, see if there's a way to differentiate.
-			const tabs = '\t'.repeat(numTabs + 1);
+			const tabs = "\t".repeat(numTabs + 1);
 			resultLine = `${resultLine} \n${tabs}${completion} ${item.title} `;
 			resultLine = `${resultLine} %%${item.id}%%`;
 		});
@@ -852,26 +969,33 @@ export class TaskParser {
 		return resultLine;
 	}
 
-	private addNote(resultLine: string, content: string, numbTabs: number, type: string, id: string, projectId: string) {
+	private addNote(
+		resultLine: string,
+		content: string,
+		numbTabs: number,
+		type: string,
+		id: string,
+		projectId: string,
+	) {
 		//TODO figure out Note presentation
 		//admonitions just don't work in indented tasks. Until I sort out the presentation, keep it simple until I
 		//get all the functionality sorted out,
-		const prefix = '\n' + '\t'.repeat(numbTabs) + '  ';
+		const prefix = "\n" + "\t".repeat(numbTabs) + "  ";
 		// resultLine = `${resultLine}${prefix}=== start ${type} ${this.getTickTickId(resultLine)}`;
 		// resultLine = `${resultLine}${prefix}`;
 		const delimiter = getSettings().noteDelimiter;
 		if (delimiter.length > 0) {
 			resultLine = `${resultLine}${prefix}${delimiter}`;
 		}
-		if (getSettings().taskLinksInObsidian === 'noteLink') {
-			const url = `[link](${this.createURL(id, projectId)})`;
+		if (getSettings().taskLinksInObsidian === "noteLink") {
+			const url = `[[🔗]](${this.createURL(id, projectId)})`;
 			resultLine = `${resultLine}${prefix}${url}`;
 		}
 		let noteLines: string[];
 		if (content.length > 0) {
-			noteLines = content.split('\n');
+			noteLines = content.split("\n");
 			if (noteLines.length > 0) {
-				if (noteLines[noteLines.length -1 ].length === 0) {
+				if (noteLines[noteLines.length - 1].length === 0) {
 					//if last line is empty remove it so it don't look ugly in markdown
 					noteLines.pop();
 				}
@@ -880,8 +1004,11 @@ export class TaskParser {
 			noteLines = [];
 		}
 
-		const linkRegex = new RegExp(`\\[.*\\]\\(obsidian://open\\?vault=.*&file=.*\\)`, 'giu');
-		noteLines.forEach(item => {
+		const linkRegex = new RegExp(
+			`\\[.*\\]\\(obsidian://open\\?vault=.*&file=.*\\)`,
+			"giu",
+		);
+		noteLines.forEach((item) => {
 			if (item.search(linkRegex) < 0) {
 				resultLine = `${resultLine}${prefix}${item}`;
 			}
@@ -895,11 +1022,9 @@ export class TaskParser {
 
 	//Returns the Item with task ID and all. taskFromLine returns the description WITHOUT the ID.
 	private getItemFromLine(itemLine: string) {
-
 		const matches = REGEX.ITEM_LINE.exec(itemLine);
 		let item: ITaskItem = {};
 		if (matches) {
-
 			const status = matches[1];
 			const text = matches[2];
 			const id = matches[3];
@@ -907,11 +1032,12 @@ export class TaskParser {
 			const itemStatus = status ? 0 : 2;
 
 			item = {
-				id: id, title: text, status: itemStatus
+				id: id,
+				title: text,
+				status: itemStatus,
 			};
 		}
 		return item;
-
 	}
 
 	private addPriorityToLine(resultLine: string, task: ITask) {
@@ -927,6 +1053,4 @@ export class TaskParser {
 		// }
 		return resultLine;
 	}
-
-
 }
